@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  AI関連ニュースをRSSから収集し、Claudeで日本語3行要約してWebhook（Slack/Discord）へ毎日通知する
+
+Parameters:
+  SecretName:
+    Type: String
+    Default: market-research-bot
+    Description: >
+      ANTHROPIC_API_KEY と WEBHOOK_URL をJSONで保持する Secrets Manager のシークレット名（事前に作成）
+  ScheduleExpression:
+    Type: String
+    Default: cron(0 9 * * ? *)
+    Description: 実行スケジュール（ScheduleTimezone のタイムゾーンで解釈。既定は毎日9:00）
+  ScheduleTimezone:
+    Type: String
+    Default: Asia/Tokyo
+  ModelId:
+    Type: String
+    Default: claude-opus-5-5
+    Description: 要約に使うClaudeのモデルID
+
+Resources:
+  NewsDigestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handler.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - arm64
+      MemorySize: 512
+      Timeout: 300
+      Environment:
+        Variables:
+          SECRET_ID: !Ref SecretName
+          MODEL: !Ref ModelId
+      LoggingConfig:
+        LogGroup: !Ref NewsDigestLogGroup
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretName}-*
+      # 関数エラー時の自動リトライで同じ通知が重複しないようにする
+      EventInvokeConfig:
+        MaximumRetryAttempts: 0
+      Events:
+        DailySchedule:
+          Type: ScheduleV2 # EventBridge Scheduler
+          Properties:
+            Name: !Sub ${AWS::StackName}-daily
+            ScheduleExpression: !Ref ScheduleExpression
+            ScheduleExpressionTimezone: !Ref ScheduleTimezone
+            RetryPolicy:
+              MaximumRetryAttempts: 0
+
+  NewsDigestLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-news-digest
+      RetentionInDays: 30
+
+Outputs:
+  FunctionName:
+    Description: 手動実行用の関数名（aws lambda invoke --function-name <これ> out.json）
+    Value: !Ref NewsDigestFunction

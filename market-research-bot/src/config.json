@@ -1,0 +1,16 @@
+{
+  "lookbackHours": 24,
+  "maxArticles": 15,
+  "feeds": [
+    { "name": "ITmedia AI+", "url": "https://rss.itmedia.co.jp/rss/2.0/aiplus.xml", "filter": false },
+    { "name": "TechCrunch AI", "url": "https://techcrunch.com/category/artificial-intelligence/feed/", "filter": false },
+    { "name": "The Verge AI", "url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", "filter": false },
+    { "name": "Publickey", "url": "https://www.publickey1.jp/atom.xml", "filter": true },
+    { "name": "GIGAZINE", "url": "https://gigazine.net/news/rss_2.0/", "filter": true }
+  ],
+  "keywords": [
+    "AI", "人工知能", "生成AI", "LLM", "大規模言語モデル", "機械学習", "深層学習", "ディープラーニング",
+    "ChatGPT", "OpenAI", "Anthropic", "Claude", "Gemini", "Copilot", "GPT",
+    "machine learning", "artificial intelligence", "neural network"
+  ]
+}

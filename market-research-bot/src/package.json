@@ -1,0 +1,22 @@
+{
+  "name": "market-research-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "*.mjs",
+    "config.json"
+  ],
+  "description": "RSSからAI関連ニュースを収集し、Claudeで3行要約してWebhookに通知する",
+  "scripts": {
+    "start": "node --env-file=.env local.mjs",
+    "dry-run": "node local.mjs --dry-run"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "rss-parser": "^3.13.0"
+  }
+}
