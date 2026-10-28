@@ -1,0 +1,38 @@
+/* src/styles/Navbar.css */
+.navbar {
+    position: fixed;         /* ページ上部に固定 */
+    top: 0;                  /* 上端に配置 */
+    left: 0;
+    width: 100%;             /* 横幅を全画面に */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 30px;
+    background-color: #000;  /* 背景色を黒に */
+    color: #fff;
+    z-index: 1000;           /* コンテンツより前面に表示 */
+  }
+  
+  .navbar-logo {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #fff;
+  }
+  
+  .navbar-links {
+    list-style: none;
+    display: flex;
+    gap: 20px;
+    margin: 0;
+  }
+  
+  .navbar-links a {
+    color: #fff;
+    text-decoration: none;
+  }
+  
+  .navbar-links a:hover {
+    color: #ccc;
+    text-decoration: underline;
+  }
+  

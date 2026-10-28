@@ -1,0 +1,31 @@
+.slider {
+    position: relative;
+    max-width: 800px;
+    margin: 0 auto;
+    text-align: center;
+  }
+  
+  .slider-content img {
+    width: 100%;
+    height: auto;
+  }
+  
+  .slider-button {
+    position: absolute;
+    top: 50%;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    padding: 10px;
+    cursor: pointer;
+    font-size: 24px;
+  }
+  
+  .slider-button-left {
+    left: 10px;
+  }
+  
+  .slider-button-right {
+    right: 10px;
+  }
+  
