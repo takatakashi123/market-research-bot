@@ -1,34 +1,32 @@
 import { readFileSync } from 'node:fs';
 import { fetchArticles } from './feeds.mjs';
-import { createSummarizer } from './summarize.mjs';
-import { notify, buildMessages, detectWebhookType } from './notify.mjs';
+import { createLlm } from './llm.mjs';
+import { summarizeArticle } from './summarize.mjs';
+import { selectArticles, writeOverview } from './curate.mjs';
+import { notify, previewNotification } from './notify.mjs';
 
 const DEFAULT_MODEL = 'claude-opus-5-5';
 const SUMMARY_CONCURRENCY = 3;
 
 const config = JSON.parse(readFileSync(new URL('./config.json', import.meta.url), 'utf8'));
 
-let cachedSecrets;
+let cachedEnv;
 
-// Lambda上では Secrets Manager から、ローカルでは環境変数から読み込む
-async function loadSecrets() {
-  if (cachedSecrets) return cachedSecrets;
-  if (!process.env.SECRET_ID) {
-    cachedSecrets = {
-      anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-      webhookUrl: process.env.WEBHOOK_URL,
-    };
-  } else {
+// 環境変数に、Secrets Manager のシークレット（JSON）の値を重ねて返す。
+// ローカルでは SECRET_ID を設定せず、.env の値だけを使う
+async function loadEnv() {
+  if (cachedEnv) return cachedEnv;
+  let secret = {};
+  if (process.env.SECRET_ID) {
     // Lambdaのランタイムに同梱されているSDKを使う
     const { SecretsManagerClient, GetSecretValueCommand } = await import('@aws-sdk/client-secrets-manager');
     const res = await new SecretsManagerClient({}).send(
       new GetSecretValueCommand({ SecretId: process.env.SECRET_ID }),
     );
-    const secret = JSON.parse(res.SecretString);
-    cachedSecrets = { anthropicApiKey: secret.ANTHROPIC_API_KEY, webhookUrl: secret.WEBHOOK_URL };
+    secret = JSON.parse(res.SecretString);
   }
-  if (!cachedSecrets.webhookUrl) throw new Error('WEBHOOK_URL が設定されていません');
-  return cachedSecrets;
+  cachedEnv = { ...process.env, ...secret };
+  return cachedEnv;
 }
 
 async function mapWithConcurrency(items, limit, fn) {
@@ -58,33 +56,78 @@ export async function handler(event = {}) {
     keywords: config.keywords,
     since,
   });
-  const targets = articles.slice(0, config.maxArticles);
-  console.log(`取得: ${articles.length}件 / 要約対象: ${targets.length}件 / フィードエラー: ${feedErrors.length}件`);
+  const { selection } = config;
+  const candidates = articles.slice(0, config.maxCandidates);
+  console.log(`取得: ${articles.length}件 / 採点対象: ${candidates.length}件 / フィードエラー: ${feedErrors.length}件`);
   feedErrors.forEach((e) => console.warn(`[feed error] ${e}`));
 
-  // ドライラン: LLMもWebhookも呼ばず、送信予定のメッセージを表示する
+  // ドライラン: LLMも通知も呼ばず、新しい順の記事で送信予定のメッセージを表示する
   if (dryRun) {
-    const preview = targets.map((a) => ({ ...a, lines: [`（ドライラン）${a.body.slice(0, 60) || a.title}`, '-', '-'] }));
-    for (const message of buildMessages({ type: 'slack', dateLabel, articles: preview, feedErrors })) {
+    const preview = candidates.slice(0, selection.maxArticles).map((a) => ({
+      ...a,
+      score: 3,
+      reason: '（ドライラン）',
+      lines: [`（ドライラン）${a.body.slice(0, 60) || a.title}`, '-', '-'],
+    }));
+    const report = {
+      dateLabel,
+      candidateCount: candidates.length,
+      overview: ['（ドライラン）今日の見立てがここに入ります'],
+      articles: preview,
+      feedErrors,
+    };
+    for (const message of previewNotification(process.env, report)) {
       console.log(`----\n${message}`);
     }
     return { fetched: articles.length, summarized: 0, dryRun: true };
   }
 
-  const { anthropicApiKey, webhookUrl } = await loadSecrets();
-  const summarize = createSummarizer({ apiKey: anthropicApiKey, model: process.env.MODEL || DEFAULT_MODEL });
+  const env = await loadEnv();
+  const llm = createLlm({ apiKey: env.ANTHROPIC_API_KEY, model: env.MODEL || DEFAULT_MODEL });
 
-  const summarized = await mapWithConcurrency(targets, SUMMARY_CONCURRENCY, async (article) => {
+  // 1) 読者の関心に沿って採点・選定。失敗した日は新しい順で代用して通知は止めない
+  let selected = [];
+  let note = '';
+  if (candidates.length) {
     try {
-      return { ...article, lines: await summarize(article) };
+      selected = await selectArticles(llm, candidates, selection);
+      console.log(`選定: ${selected.length}件 (${selected.map((a) => a.score).join(',')})`);
+    } catch (err) {
+      console.error(`[select error] ${err.message}`);
+      selected = candidates.slice(0, selection.maxArticles);
+      note = '※ 記事の採点に失敗したため、新しい順に表示しています';
+    }
+  }
+
+  // 2) 選ばれた記事を要約
+  const summarized = await mapWithConcurrency(selected, SUMMARY_CONCURRENCY, async (article) => {
+    try {
+      return { ...article, lines: await summarizeArticle(llm, article) };
     } catch (err) {
       console.error(`[summarize error] ${article.link}: ${err.message}`);
       return { ...article, lines: null };
     }
   });
 
-  await notify(webhookUrl, { dateLabel, articles: summarized, feedErrors });
+  // 3) 今日の見立て
+  let overview = null;
+  if (summarized.some((a) => a.lines)) {
+    try {
+      overview = await writeOverview(llm, summarized, selection);
+    } catch (err) {
+      console.error(`[overview error] ${err.message}`);
+    }
+  }
+
+  const channel = await notify(env, {
+    dateLabel,
+    candidateCount: candidates.length,
+    overview,
+    note,
+    articles: summarized,
+    feedErrors,
+  });
   const ok = summarized.filter((a) => a.lines).length;
-  console.log(`通知完了 (${detectWebhookType(webhookUrl)}): 要約成功 ${ok}/${summarized.length}件`);
-  return { fetched: articles.length, summarized: ok };
+  console.log(`通知完了 (${channel}): 要約成功 ${ok}/${summarized.length}件`);
+  return { fetched: articles.length, selected: summarized.length, summarized: ok };
 }

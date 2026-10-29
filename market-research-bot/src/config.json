@@ -1,10 +1,29 @@
 {
   "lookbackHours": 24,
-  "maxArticles": 15,
+  "maxCandidates": 80,
+  "selection": {
+    "maxArticles": 10,
+    "minScore": 3,
+    "interest": "AIの進化の動向を追い、それによってこの先どのような世の中になっていくのかを知りたい。",
+    "prefer": [
+      "技術の節目: AIが新しくできるようになったこと（大きな性能向上、これまでにない用途）",
+      "社会・仕事・暮らしへの影響: 雇用、教育、医療、創作などで、AIによる変化が実際に起きている事例",
+      "普及の兆し: 大企業や行政での本格導入、利用者数の急増、価格の大幅な低下",
+      "ルールの変化: 法規制、政府の方針、著作権や安全性をめぐる議論",
+      "業界構造の変化: 大型投資、買収・提携、主要企業の戦略転換",
+      "将来の見通し: 研究者や専門家による予測、注目すべき研究成果"
+    ],
+    "avoid": [
+      "既存製品の小さな機能追加やアップデート情報",
+      "イベントの告知、セール、個別製品のレビュー",
+      "AIが話の中心ではない記事（一般的なセキュリティ事件、ガジェット紹介など）"
+    ]
+  },
   "feeds": [
     { "name": "ITmedia AI+", "url": "https://rss.itmedia.co.jp/rss/2.0/aiplus.xml", "filter": false },
     { "name": "TechCrunch AI", "url": "https://techcrunch.com/category/artificial-intelligence/feed/", "filter": false },
     { "name": "The Verge AI", "url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", "filter": false },
+    { "name": "MIT Technology Review AI", "url": "https://www.technologyreview.com/topic/artificial-intelligence/feed", "filter": false },
     { "name": "Publickey", "url": "https://www.publickey1.jp/atom.xml", "filter": true },
     { "name": "GIGAZINE", "url": "https://gigazine.net/news/rss_2.0/", "filter": true }
   ],
